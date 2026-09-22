@@ -35,6 +35,18 @@ llm:
 
 # ── TTS Services (Cascaded pipeline) ──
 tts:
+  # External provider: synthesis happens in Gradium's cloud over WebSocket.
+  # `provider` selects the Pipecat service class (see examples/shared/tts_factory.py).
+  gradium-tts:
+    name: "Gradium TTS (external API)"
+    provider: gradium
+    server: "wss://api.gradium.ai/api/speech/tts"
+    voice_id: "GgfEkEJtxZR7gnpy"
+    model: "default"
+    function_id: ""
+    # Optional Gradium generation options (catalog-only, JSON string):
+    # json_config: '{"speed": 1.0, "temperature": 0.6}'
+
   magpie-multilingual-tts:
     name: "Magpie TTS Multilingual"
     server: "grpc.nvcf.nvidia.com:443"

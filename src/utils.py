@@ -53,6 +53,7 @@ _SLOT_CONFIG_KEYS: dict[str, frozenset[str]] = {
             "tts_model",
             "tts_synthesis_mode",
             "tts_language_code",
+            "tts_provider",
         }
     ),
 }
@@ -483,6 +484,7 @@ SESSION_CONFIG_KEYS: frozenset[str] = frozenset(
         "tts_model",
         "tts_synthesis_mode",
         "tts_language_code",
+        "tts_provider",
     }
 )
 
@@ -532,6 +534,7 @@ _CATALOG_HYDRATION: tuple[tuple[str, str, dict[str, str]], ...] = (
             "synthesis_mode": "tts_synthesis_mode",
             "language_code": "tts_language_code",
             "zero_shot_audio_prompt_file": "tts_zero_shot_audio_prompt_file",
+            "provider": "tts_provider",
         },
     ),
 )
