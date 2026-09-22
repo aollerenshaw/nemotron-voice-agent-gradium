@@ -32,7 +32,7 @@ examples:
       prompt: [generic_assistant]
       llm: [nemotron-lightning]
       asr: [nemotron-asr-streaming-english]
-      tts: [magpie-multilingual-tts]
+      tts: [gradium-tts]
     bot: examples.generic.pipeline:bot
 
   multilingual-assistant:

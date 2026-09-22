@@ -74,6 +74,7 @@ These are the minimum requirements, and support varies by example and deployment
 - **NVIDIA NGC**: Valid credentials for NVIDIA NGC. See the [NGC Getting Started Guide](https://docs.nvidia.com/ngc/ngc-overview/index.html#registering-activating-ngc-account).
 - **NVIDIA API Key**: Required for NVIDIA NIM models and NGC container images. Get yours at [build.nvidia.com](https://build.nvidia.com/).
 - **Docker**: With NVIDIA GPU support installed and Docker Compose v2.20 or newer.
+- **Gradium API Key**: Required for Gradium TTS models
 
 ---
 

@@ -1,0 +1,50 @@
+# 2x A100 layout with TTS served by the external Gradium API.
+#
+# The stock `generic-assistant/workstation` recipe assumes ONE 80 GB GPU shared by
+# LLM + ASR + Magpie TTS. With Magpie removed there are two local NIMs left, so we
+# give each its own A100:
+#
+#   GPU 0 -> nvidia-llm                     (Nemotron 3 Nano 30B A3B)
+#   GPU 1 -> nemotron-asr-streaming-english (~15 GB)
+#
+# Usage (note: the TTS sidecar is disabled with --scale, not here — Compose
+# `profiles` lists cannot be unset from an override file):
+#
+#   docker compose -f docker-compose.yml -f docker/docker-compose.a100.yaml \
+#     --profile generic-assistant/workstation up -d --scale tts-service=0
+
+services:
+  nvidia-llm:
+    environment:
+      # A100 is sm_80: no FP8 tensor cores. The upstream default is
+      # `precision=fp8,tp=1`, which has no A100-compatible profile. Confirm the
+      # exact tag with the `list-model-profiles` command in the deploy guide and
+      # override NIM_TAGS_SELECTOR in .env if your NIM build names it differently.
+      NIM_TAGS_SELECTOR: ${NIM_TAGS_SELECTOR:-precision=bf16,tp=1}
+      # Maps to vLLM's `gpu_memory_utilization`: the fraction of TOTAL GPU memory
+      # vLLM may use for weights + activations + KV cache combined — NOT a slice
+      # reserved for KV cache on top of the weights. BF16 weights are ~60 GB, so
+      # anything below ~0.75 leaves zero KV blocks and the engine aborts with
+      # "No available memory for the cache blocks". The upstream 0.6 default
+      # assumes FP8 weights (~30 GB) and is too low here.
+      # 0.9 x 80 GB = 72 GB budget -> ~12 GB for KV cache and activations.
+      NIM_KVCACHE_PERCENT: ${NIM_KVCACHE_PERCENT:-0.9}
+      CUDA_VISIBLE_DEVICES: "0"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+
+  nemotron-asr-streaming-english:
+    environment:
+      CUDA_VISIBLE_DEVICES: "1"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['1']
+              capabilities: [gpu]

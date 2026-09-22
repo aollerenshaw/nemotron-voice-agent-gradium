@@ -68,6 +68,7 @@ import examples_registry
 from attachment_store import consume_capture_request, store_attachment
 from examples.shared.prewarm import build_session_languages, prewarm_tts, warmup_tts_synthesis
 from examples.shared.subagents import load_subagent_registry
+from gradium_catalog import fetch_gradium_tts_config
 from utils import (
     PROJECT_ROOT,
     build_services_api_response,
@@ -269,6 +270,14 @@ def _get_default_tts_selection() -> tuple[str, str, str, str]:
         default_tts.get("function_id", ""),
         default_tts.get("model", ""),
     )
+
+
+def _is_gradium_tts(config: dict) -> bool:
+    """Return True when the active TTS selection is served by the Gradium API."""
+    provider = str(config.get("tts_provider", "") or "").strip().lower()
+    if not provider:
+        provider = str(load_service_entry("tts", "").get("provider", "") or "").strip().lower()
+    return provider == "gradium"
 
 
 def _resolve_tts_selection(
@@ -553,6 +562,12 @@ async def _ensure_asr_ready_for_connection(config: dict, example: dict) -> None:
 async def _ensure_tts_ready_for_connection(config: dict, example: dict) -> None:
     """Warm up TTS unless the selected pipeline handles it internally."""
     if _should_skip_tts_prewarm(example):
+        return
+
+    # External HTTP/WebSocket TTS providers have no Riva gRPC endpoint to probe.
+    if _is_gradium_tts(config):
+        if not os.getenv("GRADIUM_API_KEY", "").strip():
+            raise RuntimeError("GRADIUM_API_KEY is not set; the Gradium TTS provider cannot start.")
         return
 
     tts_server, voice_id, tts_function_id, tts_model = _resolve_tts_selection(
@@ -969,6 +984,15 @@ def create_app(host: str = "localhost", prompt_file: str = "") -> FastAPI:
         asr_function_id: str = Query(default=""),
     ):
         _bind_example_context_by_key(pipeline_mode or fallback_example_key)
+        # Gradium exposes its voice catalog over REST, not Riva gRPC.
+        default_tts_entry = load_service_entry("tts", "")
+        selected_server = server or str(default_tts_entry.get("server", ""))
+        if _is_gradium_tts({}) or selected_server.startswith(("ws://", "wss://")):
+            return await _run_blocking(
+                fetch_gradium_tts_config,
+                voice_id or default_tts_entry.get("voice_id", ""),
+                timeout=_CONNECT_PREWARM_TIMEOUT_SECS,
+            )
         if asr_server or asr_model or asr_function_id:
             default_asr_server, default_asr_model, default_asr_function_id = _get_default_asr_catalog()
             if llm_id.startswith("custom-"):

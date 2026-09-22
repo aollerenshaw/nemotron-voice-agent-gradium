@@ -26,24 +26,22 @@ from pipecat.processors.frameworks.rtvi.frames import RTVIServerMessageFrame
 from pipecat.runner.types import RunnerArguments
 from pipecat.services.nvidia.llm import NvidiaLLMService, NvidiaLLMSettings
 from pipecat.services.nvidia.stt import NvidiaSTTService, NvidiaSTTSettings
-from pipecat.services.nvidia.tts import NvidiaTTSService, NvidiaTTSSettings
 from pipecat.workers.runner import WorkerRunner
 
 import examples_registry
 from examples.generic.tools import TOOL_HANDLERS, build_tools_schema
 from examples.shared.activity_check import create_activity_check_processor
 from examples.shared.audio_recorder import create_audio_recorder
-from examples.shared.nemotron_speech_text_filter import NemotronSpeechTextFilter
 from examples.shared.pipeline_utils import (
     apply_pinned_prompt_summary,
     build_context_messages,
     build_user_aggregator_params,
     create_transport,
 )
+from examples.shared.tts_factory import build_tts_service
 from tracing import IS_TRACING_ENABLED
 from utils import (
     is_nvcf,
-    load_ipa_dictionary,
     load_service_entry,
     normalize_lang_code,
     parse_env_int,
@@ -131,53 +129,9 @@ async def bot(runner_args: RunnerArguments) -> None:
         logger.info(f"Tool calling disabled for prompt_key={prompt_key!r} (no tools_available in prompts.yaml)")
 
     # --- TTS ---
-    tts_server = body.get("tts_server", "") or default_tts.get("server", "grpc.nvcf.nvidia.com:443")
-    tts_ssl = is_nvcf(tts_server)
-    tts_voice = body.get("tts_voice_id", "") or default_tts.get("voice_id", "")
-    tts_synthesis_mode = body.get("tts_synthesis_mode", "")
-    raw_tts_function_id = body.get("tts_function_id")
-    tts_function_id = (
-        str(raw_tts_function_id) if raw_tts_function_id is not None else default_tts.get("function_id", "")
-    )
-    tts_model = body.get("tts_model", "") or default_tts.get("model", "")
-    tts_zero_shot_audio_prompt_file = body.get("tts_zero_shot_audio_prompt_file", "") or default_tts.get(
-        "zero_shot_audio_prompt_file", ""
-    )
-    tts_language_code = body.get("tts_language_code", "") or default_tts.get("language_code", "")
-    if tts_language_code:
-        tts_language_code = normalize_lang_code(tts_language_code)
-    custom_dictionary = load_ipa_dictionary()
-
-    tts_settings_kwargs: dict = {"voice": tts_voice}
-    if tts_synthesis_mode:
-        tts_settings_kwargs["synthesis_mode"] = tts_synthesis_mode
-    if tts_language_code:
-        tts_settings_kwargs["language"] = tts_language_code
-    tts_kwargs: dict = {
-        "api_key": os.getenv("NVIDIA_API_KEY"),
-        "server": tts_server,
-        "settings": NvidiaTTSSettings(**tts_settings_kwargs),
-        "use_ssl": tts_ssl,
-        "text_filters": [NemotronSpeechTextFilter()],
-        "custom_dictionary": custom_dictionary,
-    }
-    if tts_function_id or tts_model:
-        tts_kwargs["model_function_map"] = {
-            "function_id": tts_function_id,
-            "model_name": tts_model,
-        }
-    if tts_zero_shot_audio_prompt_file:
-        tts_kwargs["zero_shot_audio_prompt_file"] = tts_zero_shot_audio_prompt_file
-    tts = NvidiaTTSService(**tts_kwargs)
-
-    logger.info(
-        f"TTS: server={tts_server}, ssl={tts_ssl}, voice={tts_voice}, "
-        f"model={tts_model or '(pipecat default)'}, function_id={tts_function_id or '(pipecat default)'}, "
-        f"synthesis_mode={tts_synthesis_mode or '(pipecat default)'}, "
-        f"language={tts_language_code or '(pipecat default)'}, "
-        f"zero_shot_audio_prompt_file={tts_zero_shot_audio_prompt_file or '(none)'}, "
-        f"text_filters=[NemotronSpeechTextFilter]"
-    )
+    # Provider is resolved from the selected catalog entry (`provider:` field).
+    # Entries without one keep the NVIDIA/Riva path. See examples/shared/tts_factory.py.
+    tts = build_tts_service(body, default_tts)
 
     # --- Context ---
     messages = build_context_messages(base_system_content, system_prompt)
@@ -335,7 +289,7 @@ async def bot(runner_args: RunnerArguments) -> None:
             settings_kwargs["language"] = normalize_lang_code(language)
         await task.queue_frame(
             TTSUpdateSettingsFrame(
-                delta=NvidiaTTSSettings(**settings_kwargs),
+                delta=type(tts).Settings(**settings_kwargs),
                 service=tts,
             )
         )
