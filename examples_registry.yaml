@@ -30,7 +30,7 @@ examples:
       warning_completion_timeout_s: 45
     defaults:
       prompt: [generic_assistant]
-      llm: [nemotron-nano]
+      llm: [nemotron-lightning]
       asr: [nemotron-asr-streaming-english]
       tts: [gradium-tts]
     bot: examples.generic.pipeline:bot

@@ -986,7 +986,8 @@ def create_app(host: str = "localhost", prompt_file: str = "") -> FastAPI:
         _bind_example_context_by_key(pipeline_mode or fallback_example_key)
         # Gradium exposes its voice catalog over REST, not Riva gRPC.
         default_tts_entry = load_service_entry("tts", "")
-        if "gradium" in (server or str(default_tts_entry.get("server", ""))).lower():
+        selected_server = server or str(default_tts_entry.get("server", ""))
+        if _is_gradium_tts({}) or selected_server.startswith(("ws://", "wss://")):
             return await _run_blocking(
                 fetch_gradium_tts_config,
                 voice_id or default_tts_entry.get("voice_id", ""),
